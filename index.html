@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -76,7 +77,8 @@ button{border:0;background:none;cursor:pointer}
 .pista i{font-style:normal;color:var(--tinta2)}
 
 /* ═══ ACCESOS ═══ */
-.accbar{display:flex;gap:5px;align-items:center;margin-top:7px;min-width:0}
+.accbar{display:flex;gap:5px;align-items:flex-start;margin-top:7px;min-width:0}
+.accbar > .acc-lupa,.accbar > .acc-q,.accbar > .acc-fijo{margin-top:1px}
 .acc-lupa{flex:none;width:28px;height:28px;border-radius:8px;border:1px solid var(--linea2);
   background:var(--panel);color:var(--tinta3);display:grid;place-items:center;transition:.13s}
 .acc-lupa:hover,.acc-lupa[aria-pressed="true"]{border-color:var(--acento);color:var(--acento);
@@ -84,9 +86,9 @@ button{border:0;background:none;cursor:pointer}
 .acc-q{flex:none;width:min(210px,42vw);padding:5px 10px;border-radius:8px;font-size:12.5px;
   border:1.5px solid var(--acento);background:var(--panel);outline:none}
 .acc-q::placeholder{color:var(--tinta3)}
-.accesos{display:flex;gap:5px;align-items:center;overflow-x:auto;flex:1;min-width:0;
-  scrollbar-width:none;padding-bottom:1px}
-.accesos::-webkit-scrollbar{display:none}
+.accesos{display:flex;gap:5px;align-items:center;flex-wrap:wrap;flex:1;min-width:0;
+  overflow:hidden;transition:max-height .16s ease}
+.acc-fijo{flex:none;display:flex;gap:5px;align-items:center}
 .acc{display:flex;align-items:center;gap:6px;padding:5px 10px 5px 7px;border-radius:8px;
   background:var(--panel);border:1px solid var(--linea2);text-decoration:none;color:var(--tinta2);
   font-size:12.5px;font-weight:600;white-space:nowrap;transition:.12s;flex:none;max-width:170px}
@@ -105,6 +107,8 @@ button{border:0;background:none;cursor:pointer}
   white-space:nowrap;padding:0 3px}
 .acc.tope{border-color:var(--acento);box-shadow:0 0 0 2px var(--acento-suave)}
 .acc-mas:hover{border-color:var(--acento);color:var(--acento);border-style:solid}
+.acc-mas.cuenta{border-style:solid;background:var(--panel2);color:var(--tinta2)}
+.acc-mas[hidden]{display:none}
 
 /* administrar accesos */
 .accfila{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:9px;
@@ -437,6 +441,10 @@ const CONFIG = {
       </button>
       <input class="acc-q oculto" id="accQ" placeholder="buscar… ej: dashboard b2c" autocomplete="off">
       <div class="accesos" id="accesos"></div>
+      <div class="acc-fijo">
+        <button class="acc-mas cuenta" id="accMas" data-accmas="1" hidden>+0</button>
+        <button class="acc-mas" id="accEditar" data-accpanel="1">editar</button>
+      </div>
     </div>
     <div class="pista" id="pista"></div>
   </div>
@@ -685,6 +693,7 @@ const GRUPOS = [
 let VISTA = "hoy", FILTRO = "todas";
 let DATOS = [], ACC = [], BIE = {};
 let BIE_MES = new Date(), BIE_SEL = null, AHORA_I = 0, HECH_TODO = false, ACC_Q = "";
+let ACC_EXP = Number(lee("accexp", 0)) || 0;
 let DEMO = false, COLA = [], TRI = { lista:[], i:0, r:{} }, DET = null;
 let ULTIMA = null;
 
@@ -1399,8 +1408,39 @@ function pintaAccesos(){
 
   $("#accesos").innerHTML =
       (q && !l.length ? '<span class="acc-cuenta">nada con «'+esc(q)+'»</span>' : pastillas)
-    + (q ? '<span class="acc-cuenta">'+l.length+' de '+todos.length+'</span>' : '')
-    + '<button class="acc-mas" data-accpanel="1">'+(todos.length ? "editar" : "+ agregar un acceso")+'</button>';
+    + (q ? '<span class="acc-cuenta">'+l.length+' de '+todos.length+'</span>' : '');
+
+  $("#accEditar").textContent = todos.length ? "editar" : "+ agregar un acceso";
+  ajustaAccesos();
+}
+
+/* Deja los accesos en UNA sola fila y esconde el resto tras un chip «+N».
+   Al expandir, se acomodan en varias filas sin barrido horizontal. */
+function ajustaAccesos(){
+  const cont = $("#accesos"), mas = $("#accMas");
+  if (!cont || !mas) return;
+
+  cont.style.maxHeight = "";                 // medir sin recorte
+  const piezas = Array.from(cont.children);
+
+  // buscando: se muestran todos los resultados, sin chip
+  if (!piezas.length || ACC_Q.trim()){ mas.hidden = true; return; }
+
+  const fila1 = piezas[0].offsetTop;
+  const fuera = piezas.filter(p => p.offsetTop > fila1).length;
+
+  if (!fuera){ mas.hidden = true; return; }
+  mas.hidden = false;
+
+  if (ACC_EXP){
+    cont.style.maxHeight = cont.scrollHeight + "px";
+    mas.textContent = "− menos";
+    mas.title = "Volver a una sola fila";
+  } else {
+    cont.style.maxHeight = piezas[0].offsetHeight + "px";
+    mas.textContent = "+" + fuera;
+    mas.title = fuera + (fuera === 1 ? " acceso más" : " accesos más") + " · clic para verlos todos";
+  }
 }
 
 function buscarAcc(abrir){
@@ -1701,7 +1741,7 @@ function abrirSel(tam){
 
 /* ═══ EVENTOS ═══ */
 document.addEventListener("click", ev => {
-  const b = ev.target.closest("[data-marcar],[data-detalle],[data-hoy],[data-quitar],[data-elegir],[data-sel],[data-tardo],[data-nudge],[data-toast],[data-accpanel],[data-accdel],[data-accmv],[data-bie],[data-tog],[data-empezar],[data-manana],[data-hechtodo]");
+  const b = ev.target.closest("[data-marcar],[data-detalle],[data-hoy],[data-quitar],[data-elegir],[data-sel],[data-tardo],[data-nudge],[data-toast],[data-accpanel],[data-accmas],[data-accdel],[data-accmv],[data-bie],[data-tog],[data-empezar],[data-manana],[data-hechtodo]");
   if (!b) return;
   const d = b.dataset;
   if (d.bie && d.k){ if (d.k !== "nota") marcaBie(d.bie, d.k, !dia(d.bie)[d.k]); BIE_SEL = d.bie; pintaDiaSel(); }
@@ -1709,6 +1749,7 @@ document.addEventListener("click", ev => {
   else if (d.empezar) empezar(d.empezar);
   else if (d.manana) paraManana(d.manana);
   else if (d.hechtodo !== undefined){ HECH_TODO = d.hechtodo === "1"; pintaBandeja(); }
+  else if (d.accmas){ ACC_EXP = ACC_EXP ? 0 : 1; guarda("accexp", ACC_EXP); ajustaAccesos(); }
   else if (d.accpanel){ cierraToast(); abrirAccesos(); }
   else if (d.accdel) borrarAcceso(d.accdel);
   else if (d.accmv) moverAcceso(d.accmv, Number(d.d));
@@ -1767,6 +1808,10 @@ $("#accLupa").onclick = () => {
   else buscarAcc(true);
 };
 $("#accQ").addEventListener("input", e => { ACC_Q = e.target.value; pintaAccesos(); });
+
+let tAcc;
+window.addEventListener("resize", () => { clearTimeout(tAcc); tAcc = setTimeout(ajustaAccesos, 120); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => ajustaAccesos());
 $("#accQ").addEventListener("keydown", e => {
   if (e.key === "Enter"){ e.preventDefault(); abrirPrimero(); }
   if (e.key === "Escape"){ e.preventDefault(); buscarAcc(false); $("#txt").focus(); }
